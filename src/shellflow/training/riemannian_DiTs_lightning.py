@@ -275,7 +275,20 @@ class RiemannianDiTsModule(L.LightningModule):
         # architecture="legacy_type_film" selects the paper architecture
         # (type embedding in FiLM/adaLN conditioning, per-sector projections)
         # used by the released checkpoints; see riemannian_DiTs_model_legacy.
-        if model_config.get("architecture") == "legacy_type_film":
+        # backbone="lgatr_slim" selects the L-GATr-slim blocks (ShellGATr); see
+        # riemannian_DiTs_model_slimLGATr. It needs the gatr extra.
+        backbone = model_config.get("backbone")
+        if backbone not in (None, "lgatr_slim"):
+            raise ValueError(f"unknown backbone {backbone!r}; known: 'lgatr_slim'")
+        if backbone == "lgatr_slim":
+            if model_config.get("architecture") is not None:
+                raise ValueError("backbone 'lgatr_slim' takes no architecture key")
+            from shellflow.models.riemannian_DiTs_model_slimLGATr import (
+                create_riemannian_dits_slim,
+            )
+
+            self.model = create_riemannian_dits_slim(model_config_with_aux)
+        elif model_config.get("architecture") == "legacy_type_film":
             from shellflow.models.riemannian_DiTs_model_legacy import (
                 create_riemannian_dits as create_legacy_riemannian_dits,
             )

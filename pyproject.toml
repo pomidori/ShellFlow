@@ -32,10 +32,16 @@ dependencies = [
 xrootd = [
     "xrootd>=5.9.1",
 ]
+gatr = [
+    "lgatr @ git+https://github.com/heidelberg-hepml/lgatr@86d3fb8ab6cbd591c9447a55dc01e553a8b1848d",
+]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true  # the gatr extra pins lgatr to a git commit
 
 [dependency-groups]
 dev = [

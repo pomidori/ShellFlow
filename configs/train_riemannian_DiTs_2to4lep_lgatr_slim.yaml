@@ -1,0 +1,204 @@
+# =============================================================================
+# Aux-head K-body run on the 2to4lep skim — baseline companion to
+# train_riemannian_DiTs_1LMET30_2to4lep.yaml (same model + DM machinery).
+#
+# Identical model / aux-head / quality / distribution-matching physics to the
+# union config; ONLY the dataset (2to4lep_reduced) and epoch budget differ.
+# Intended to run in parallel with the union run (e.g. union on GPU 0-3, this on
+# GPU 4-7) to compare union-vs-2to4lep under the same DM setup.
+#
+# Dataset: 2to4lep_reduced (~282M events). DM truth-KDE + higgs callbacks point
+#   at the 2to4lep reduced dataloader cfg.
+#
+# DM weight w* = (p̂_truth / ((1-η)·p̂_gen + η·p̂_truth))^α (η=0.2). gen-KDE is
+#   train-sourced, step-based (every 2000 steps), EMA-accumulated.
+#
+# NOTE: the OSSF inv-mass 2to4lep-cut (generation.monitor) is OMITTED here — the
+#   training data is already 2to4lep, so the cut is a no-op and monitoring uses
+#   the val split directly (full OSSF statistics).
+# Run identity: rfm_slim_v32s96_l6_h4_2to4lep_e100 (ShellGATr). The same run as
+# train_riemannian_DiTs_2to4lep.yaml with L-GATr-slim blocks in place of the
+# attention blocks: 32 vectors, 96 scalars, 4 heads, flat token 224, 3,087,498
+# parameters. Trained 100 epochs on 4 GPUs at 4096 events per GPU.
+# Needs the gatr extra: uv sync --extra gatr
+# =============================================================================
+# Resume Settings
+# =============================================================================
+resume:
+  checkpoint_path: null
+  finetune_from: null
+
+# =============================================================================
+# Model Architecture  (identical to the union config)
+# =============================================================================
+model:
+  backbone: lgatr_slim            # L-GATr-slim blocks (arXiv:2512.17011)
+  v_channels: 32                  # 4 v_channels + s_channels = d_model
+  s_channels: 96
+  p_scale: 50.0                   # GeV, the physical input vector is p^mu/p_scale
+  d_model: 224
+  num_heads: 4
+  num_layers: 6
+  max_particles: 10
+  mlp_ratio: 4.0
+  dropout: 0.0
+  num_extra_features: 13
+  met_embed_dim: 64
+  num_met_tokens: 4
+  per_particle_adaln: true
+
+  direction_geometry: "S2"
+  sigma_prior: 1.0
+  t_sample_method: "uniform"
+  t_sample_mu: 0.0
+  t_sample_sigma: 1.0
+  t_power_exponent: 1.5
+  t_min: 0.01
+  t_max: 0.999999
+
+  loss_weighting_t: false
+  loss_weighting_t_bins: 16
+  loss_weighting_t_warmup: 2000
+  loss_weighting_t_alpha: 0.01
+  loss_weighting_t_temp: 1.0
+
+  ema_decay: 0.9995
+  huber_delta: 1.0
+  pbfm_K: 4
+  aux_every_n_steps: 1
+
+  aux_head:
+    enabled: true
+    lambda_pos: 1.0
+    lambda_vel: 1.0
+    pos_t_gate: 0.99
+    k_max: 4
+    k_weights:
+      "2": 1.0
+      "3": 1.0
+      "4": 1.0
+    hierarchical:
+      enabled: true
+    distribution_matching:
+      enabled: true
+      dataloader_config: src/shellflow/config/dataloader_config_06_2to4lep_reduced.yaml
+      bandwidth: 0.01
+      grid_size: 4096
+      grid_lo: -3.0
+      grid_hi: 6.0
+      max_events: 100000
+      max_kde_samples: 200000
+      alpha: 1.0          # log-ratio exponent: w* = (p̂_truth/p̂_gen)^α
+      eta: 0.2            # truth-prior mix; ceiling (1/η)^α = 5.0 at α=1, smooth, no lower clamp
+      category_scheme: type_charge
+      category_min_samples: 2000
+
+# =============================================================================
+# Quality weighting (consolidated; identical to the union config)
+# =============================================================================
+quality_weighting:
+  enabled: true
+  cfm_q_floor: 0.0
+  iso_cut_lep: 0.15
+  iso_alpha_lep: 10.0
+  ip_cut_lep: 3.0
+  ip_alpha_lep: 1.0
+  iso_cut_photon: 0.15
+  iso_alpha_photon: 10.0
+  jvt_cut_jet: 0.5
+  jvt_alpha_jet: 5.0
+  rnn_cut_tau: 0.5
+  rnn_alpha_tau: 5.0
+  d2_cut_lrj: 1.5
+  d2_alpha_lrj: 5.0
+
+# =============================================================================
+# Optimizer / scheduler / data / training
+# =============================================================================
+optimizer:
+  lr: 0.0003
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+
+scheduler:
+  name: cosine
+  # Absolute warmup — GPU-invariant, tracks optimizer settling + the large
+  # (16k at 4 GPU) effective batch. 10k steps is a solid ramp.
+  warmup_pct: null
+  warmup_steps: 10000
+  min_lr: 1.0e-6
+
+data:
+  dataset: 2to4lep_reduced
+  train_split: 0.95
+  batch_size: 4096                # per-device; 4 GPU → 16,384 effective batch
+  num_workers: 16
+  lazy_loading: true
+  normalize: true
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 4
+
+training:
+  # Natural epoch — one full pass over the ~268M train events (~16,364 steps at
+  # 4 GPU). Validation capped (cheap spot-check), independent of epoch size.
+  limit_train_batches: null
+  limit_val_batches: 200          # spot-check val (~3.3M events)
+  epochs: 100                     # natural passes. Length knob.
+  grad_clip: 1.0
+  seed: 42
+  log_every_n_steps: 50
+  val_checks_per_epoch: 1
+  compile_model: true
+  compile_mode: default
+  test_mode: false
+  test_mode_samples: 1000
+
+generation:
+  enabled: true
+  num_samples: 50000
+  batch_size: 4096
+  n_gen_steps: 200
+  every_n_epochs: 5               # kinematic/Higgs plots cadence (epoch-based)
+  higgs:
+    enabled: true
+    every_n_epochs: 10
+    dataloader_config: src/shellflow/config/dataloader_config_06_2to4lep_reduced.yaml
+    data_dir: data/run2_data_4lep_reduced
+    batch_size: 16384
+    shard_dir: /tmp/higgs_shards
+  # No `monitor:` block — training data is already 2to4lep, so the OSSF inv-mass
+  # cut is a no-op; monitoring uses the val split (full OSSF statistics).
+
+# DM gen-KDE — SEPARATE generation that produces p̂_gen for the training weight
+# w* (not the monitoring plots). Train-sourced (no leak), step-based, EMA.
+# refresh_steps: every N optimizer steps (~8 refreshes/epoch on 2to4lep). null →
+#   legacy epoch-based refresh. num_samples / n_steps: own budget.
+gen_kde:
+  refresh_steps: 2000
+  ema: 0.3
+  num_samples: 50000
+  n_steps: 200
+
+checkpoint:
+  dir: checkpoints/rfm_slim_v32s96_l6_h4_2to4lep_e100
+  save_every_n_epochs: 1
+  save_top_k: 3
+
+early_stopping:
+  enabled: false
+  patience: 10
+  min_delta: 0.0001
+
+wandb:
+  enabled: true
+  project: shellflow
+  name: rfm_slim_v32s96_l6_h4_2to4lep_e100
+  tags: [riemannian, rfm, 2to4lep_reduced, data06, kbody_aux_head, k4, hierarchical, quality_weighted, cfm_particleness, cfm_q_floor_00, distribution_matching, category_conditioned_dm, type_charge_categories, fixed_point, depth_l6, width_d224, per_particle_adaln, film_extras, film_always_on, s2, huber, post_ema_broadcast_fix, legacy_chart, mu_onshell, tau_floor_005, eta_truthmix, gen_kde_stepwise]
+  run_id: null
+  save_code: true
+  log_model: false
+
+device: auto
+precision: "bf16-mixed"

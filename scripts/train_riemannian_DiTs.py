@@ -605,7 +605,18 @@ def main():
         "num_met_tokens": num_met_tokens,
         "manifold_stats": manifold_stats,
     }
-    temp_model = create_riemannian_dits(model_config_dict)
+    if model_cfg.get("backbone") == "lgatr_slim":
+        # TF32 rounds fp32 matmul inputs to 10 mantissa bits, which cancels the fp32
+        # vector stream of the slim layers.
+        torch.set_float32_matmul_precision("highest")
+        torch.backends.cudnn.allow_tf32 = False
+        from shellflow.models.riemannian_DiTs_model_slimLGATr import (
+            create_riemannian_dits_slim,
+        )
+
+        temp_model = create_riemannian_dits_slim({**model_cfg, **model_config_dict})
+    else:
+        temp_model = create_riemannian_dits(model_config_dict)
     n_params = sum(p.numel() for p in temp_model.parameters() if p.requires_grad)
     del temp_model
 

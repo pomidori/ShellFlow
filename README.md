@@ -105,6 +105,26 @@ model = module.ema_model  # paper results use the EMA weights
 
 The released checkpoints use the paper architecture (selected automatically via `architecture: legacy_type_film` in their stored hyperparameters; implemented in `src/shellflow/models/riemannian_DiTs_model_legacy.py`). Models trained with this repository's configs use the current architecture in `riemannian_DiTs_model.py`; the two are not checkpoint-compatible. See the Hugging Face model card for the per-model details and a generation example.
 
+The same Hugging Face repository has two models trained on the reduced `2to4lep` dataset with this repository's code. They load with the snippet above; only the file name changes.
+
+### ShellFlow-B
+
+ShellFlow-B uses the current architecture in `riemannian_DiTs_model.py`. Train it with `configs/train_riemannian_DiTs_2to4lep.yaml` (the command in [Training](#training)). The checkpoint is `shellflow_b_2to4lep/model.ckpt`.
+
+### ShellGATr
+
+ShellGATr replaces the attention blocks of ShellFlow-B with the Lorentz-equivariant L-GATr-slim layers of [lgatr](https://github.com/heidelberg-hepml/lgatr) ([arXiv:2512.17011](https://arxiv.org/abs/2512.17011)). Each token holds 32 Lorentz vectors and 96 scalars, and the model has 3,087,498 parameters. The key `backbone: lgatr_slim` in the `model:` block of a config selects it; the code is in `src/shellflow/models/riemannian_DiTs_model_slimLGATr.py`. The checkpoint is `shellgatr_2to4lep/model.ckpt`.
+
+ShellGATr needs the optional `gatr` extra, which installs lgatr at a fixed commit:
+
+```bash
+uv sync --extra gatr
+uv run python scripts/train_riemannian_DiTs.py \
+    --config configs/train_riemannian_DiTs_2to4lep_lgatr_slim.yaml
+```
+
+The slim model has only the padded forward pass, so `--geometric` and `--flat` do not work with it. The training script turns TF32 off for this backbone, because TF32 rounds the fp32 vector stream. If you generate on a GPU, keep TF32 off with `torch.set_float32_matmul_precision("highest")`.
+
 ## Reproducing the paper
 
 **Main run (union dataset).** The flagship model is trained on the union of the `1LMET30` and `2to4lep` skims, de-duplicated by run and event number:

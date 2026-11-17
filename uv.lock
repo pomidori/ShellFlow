@@ -836,6 +836,14 @@ wheels = [
 ]
 
 [[package]]
+name = "lgatr"
+version = "2.0.0.post3"
+source = { git = "https://github.com/heidelberg-hepml/lgatr?rev=86d3fb8ab6cbd591c9447a55dc01e553a8b1848d#86d3fb8ab6cbd591c9447a55dc01e553a8b1848d" }
+dependencies = [
+    { name = "torch" },
+]
+
+[[package]]
 name = "lightning"
 version = "2.6.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1842,6 +1850,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+gatr = [
+    { name = "lgatr" },
+]
 xrootd = [
     { name = "xrootd" },
 ]
@@ -1858,6 +1869,7 @@ requires-dist = [
     { name = "aiohttp", specifier = ">=3.11" },
     { name = "awkward", specifier = ">=2.8.8" },
     { name = "huggingface-hub", specifier = ">=0.26" },
+    { name = "lgatr", marker = "extra == 'gatr'", git = "https://github.com/heidelberg-hepml/lgatr?rev=86d3fb8ab6cbd591c9447a55dc01e553a8b1848d" },
     { name = "lightning", specifier = ">=2.6.0" },
     { name = "matplotlib", specifier = ">=3.10.6" },
     { name = "numpy", specifier = ">=2.3.3" },
@@ -1872,7 +1884,7 @@ requires-dist = [
     { name = "xrootd", marker = "extra == 'xrootd'", specifier = ">=5.9.1" },
     { name = "zarr", specifier = ">=3.1.5" },
 ]
-provides-extras = ["xrootd"]
+provides-extras = ["xrootd", "gatr"]
 
 [package.metadata.requires-dev]
 dev = [
